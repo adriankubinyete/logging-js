@@ -97,7 +97,7 @@ const base = logging.getLogger('base')
 
 // tell it that everything from that root foward needs to be sent to both transports (console and file)
 const console_t = new logging.transports.Console()
-const file_t = new logging.transports.FIleRotate({
+const file_t = new logging.transports.FileRotate({
     filename: "./logs/test-%DATE%.log",
     maxSize: "20m",
     maxFiles: 14
@@ -114,8 +114,7 @@ something()
 something_else()
 // <wont return anything>
 
-// we can make it return something by registering a transport to it
-
+// we can make it return something by registering a transport to it's root
 const something_logger = logging.getLogger('something') // we want the "something" root
 something_logger.addTransport(console_t)
 something_logger.addTransport(file_t)
