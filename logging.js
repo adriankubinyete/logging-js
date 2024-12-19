@@ -108,9 +108,9 @@ class Logger {
         // this allow us to do "logger.<info/debug/etc>('message')" and actually sends it to winston
         // function Logger.[LEVEL](message)
         for (const level in LEVELS) {
-            this[level] = (m) => {
+            this[level] = (...args) => {
                 // update childrens before logging // probably not efficient here... only do it at transport?
-                this.winston[level](m);
+                this.winston[level](...args);
             }
         }
     }
