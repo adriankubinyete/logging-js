@@ -95,6 +95,7 @@ class Logger {
     constructor(builder, name) {
         this.builder = builder;
         this.name = name;
+        this.prefix = undefined;
         this.children = undefined;
         this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
         this.padding = 8
@@ -109,8 +110,26 @@ class Logger {
         // function Logger.[LEVEL](message)
         for (const level in LEVELS) {
             this[level] = (...args) => {
-                // update childrens before logging // probably not efficient here... only do it at transport?
-                this.winston[level](...args);
+
+                // iterate over args
+                for (let i = 0; i < args.length; i++) {
+                    const arg = args[i];
+
+                    // pretty objects, arrays
+                    if (typeof arg === 'object') {
+                        args[i] = '\n'+JSON.stringify(arg, null, 2);
+                    }
+
+                    // pretty functions
+                    if (typeof arg === 'function') {
+                        args[i] = '\n' + arg;
+                    }
+                }
+
+                let message = args.join(' ');
+                if (this.prefix) message = this.prefix + " " + message; // add prefix if any
+
+                this.winston[level](message); // do the actual logging
             }
         }
     }
@@ -141,15 +160,21 @@ class Logger {
     setLevel(level) {
         this.winston.level = level;
         this._propagateLevel(level); // propagate level to child logs
+        return this
+    }
+
+    setPrefix(prefix) {
+        this.prefix = prefix;
+        return this
     }
 
     addTransport(Transport) {
-
         // @NOTE(adrian): THIS line right here is what make us incompatible with winston formatters
         // and why we need custom transport "wrappers": we need to tell the formatter the name of the label
         // i dont know how to do this any other way. deal with it
         this.winston.add(Transport.gen(this.name)); // update our log
         this._propagateTransport(Transport); // propagate transport to child logs 
+        return this
     }
 
 }
