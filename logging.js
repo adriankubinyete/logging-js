@@ -2,16 +2,16 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 
 const LEVELS = {
-    critical: { level: 0, color: "bold red blackBG" },
-    error: { level: 1, color: "red" },
-    warn: { level: 2, color: "yellow" },
-    info: { level: 3, color: "bold green" },
-    debug: { level: 4, color: "blue" },
-    trace: { level: 5, color: "cyan" },
-    unit: { level: 6, color: "bold cyan" }
+    critical: { level: 0, color: "bold red blackBG", ansi: "\x1b[1m"  },
+    error: { level: 1, color: "red", ansi: "\x1b[31m" },
+    warn: { level: 2, color: "yellow", ansi: "\x1b[33m" },
+    info: { level: 3, color: "bold green", ansi: "\x1b[32m" },
+    debug: { level: 4, color: "blue", ansi: "\x1b[34m" },
+    trace: { level: 5, color: "cyan", ansi: "\x1b[36m" },
+    unit: { level: 6, color: "bold cyan", ansi: "\x1b[36m" }, //
 }
 
-// Função para mapear a cor do LEVELS.color para códigos ANSI
+// map log colors to ansi codes
 function getAnsiColor(colorString) {
     const colorMap = {
         bold: "\x1b[1m",
@@ -37,14 +37,16 @@ const shutup = new winston.transports.Console({
 })
 
 class EasyConsole {
-    constructor() {
+    constructor(options = { level: 'debug' }) {
         this.name = "EasyConsole";
         this.padding = 8;
         this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        this.level = options.level;
     }
 
     gen(name) {
         return new winston.transports.Console({
+            level: this.level,
             format: winston.format.combine(
                 winston.format.label({ label: name }),
                 winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS', tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
@@ -62,13 +64,14 @@ class EasyConsole {
 }
 
 class EasyFileRotate {
-    constructor(options) {
+    constructor(options = { filename: undefined, maxSize: undefined, maxFiles: undefined, level: 'debug' }) {
         this.name = "EasyFileRotate";
         this.padding = 8;
         this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         this.filename = options.filename;
         this.maxSize = options.maxSize;
         this.maxFiles = options.maxFiles;
+        this.level = options.level;
     }
 
     gen(name) {
@@ -78,6 +81,7 @@ class EasyFileRotate {
             zippedArchive: true,
             maxSize: this.maxSize,
             maxFiles: this.maxFiles,
+            level: this.level,
             format: winston.format.combine(
                 winston.format.uncolorize(),
                 winston.format.label({ label: name }),
@@ -108,7 +112,7 @@ class Logger {
 
         // this allow us to do "logger.<info/debug/etc>('message')" and actually sends it to winston
         // function Logger.[LEVEL](message)
-        for (const level in LEVELS) {
+        for (const level in this.builder.levels) {
             this[level] = (...args) => {
 
                 // iterate over args
@@ -118,15 +122,25 @@ class Logger {
                     // pretty objects, arrays
                     if (typeof arg === 'object') {
                         args[i] = '\n'+JSON.stringify(arg, null, 2);
+                        if (i < args.length - 1) args[i] += '\n'; // suffix newline if not last arg
                     }
 
                     // pretty functions
                     if (typeof arg === 'function') {
                         args[i] = '\n' + arg;
+                        if (i < args.length - 1) args[i] += '\n'; // suffix newline if not last arg
+                    }
+
+                    // Check if the previous argument doesn't end with a newline
+                    if (
+                        i < args.length - 1 &&
+                        !(String(args[i]).endsWith('\n') || (i > 0 && String(args[i - 1])?.endsWith('\n')))
+                    ) {
+                        args[i] += ' ';
                     }
                 }
 
-                let message = args.join(' ');
+                let message = args.join('');
                 if (this.prefix) message = this.prefix + " " + message; // add prefix if any
 
                 this.winston[level](message); // do the actual logging
@@ -146,22 +160,11 @@ class Logger {
         }
     }
 
-    // Propagate the level to child logs
-    _propagateLevel(level) {
-        this.children = this.builder.loggers.filter(logger => logger.name.startsWith(this.name + "."));
-        for (const child of this.children) {
-            child.setLevel(level); // set level to it
-        }
-    }
+    // This wont be implemented. I think it makes sense for the prefix to only affect the current log
+    //_propagatePrefix(prefix) { return }
 
     // ----------------------------------------------------------------------------------------------------
     // Methods 
-
-    setLevel(level) {
-        this.winston.level = level;
-        this._propagateLevel(level); // propagate level to child logs
-        return this
-    }
 
     setPrefix(prefix) {
         this.prefix = prefix;
@@ -201,8 +204,8 @@ class LogBuilder {
         }
 
         // Adding this.[LEVEL] consts to the class
-        for (let level in LEVELS) {
-            this[level.toUpperCase()] = LEVELS[level].level;
+        for (let level in this.levels) {
+            this[level.toUpperCase()] = level;
         }    
     }
 
@@ -210,16 +213,16 @@ class LogBuilder {
 
     _getLevels() {
         const levels = {};
-        for (const key in LEVELS) {
-            levels[key] = LEVELS[key].level;
+        for (const key in this.levels) {
+            levels[key] = this.levels[key].level;
         }
         return levels;
     }
 
     _getColors() {
         const colors = {};
-        for (const key in LEVELS) {
-            colors[key] = LEVELS[key].color;
+        for (const key in this.levels) {
+            colors[key] = this.levels[key].color;
         }
         return colors;
 
