@@ -99,6 +99,7 @@ class Logger {
     constructor(builder, name) {
         this.builder = builder;
         this.name = name;
+        this.transports = [];
         this.prefix = undefined;
         this.children = undefined;
         this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -175,6 +176,7 @@ class Logger {
         // @NOTE(adrian): THIS line right here is what make us incompatible with winston formatters
         // and why we need custom transport "wrappers": we need to tell the formatter the name of the label
         // i dont know how to do this any other way. deal with it
+        this.transports.push(Transport); // add transport to our log
         this.winston.add(Transport.gen(this.name)); // update our log
         this._propagateTransport(Transport); // propagate transport to child logs 
         return this
@@ -231,18 +233,29 @@ class LogBuilder {
     // -------------------------------------------------
 
     getLogger(name) {
-
-        // get logger if it exists
+        // check logger already exist
         let logger = this.loggers.find(logger => logger.name === name);
-        if (logger) {
-            return logger;
-        }
-
-        // logger does not exist, register a new one and return it
+        if (logger) return logger;
+    
+        // create new logger
         logger = new Logger(this, name);
+    
+        // check if theres a parent log with same name
+        const parentLogger = this.loggers.find(logger => name.startsWith(logger.name + '.'));
+        if (parentLogger) {
+            // inherit transports
+            if (parentLogger.transports && Array.isArray(parentLogger.transports)) {
+                parentLogger.transports.forEach(transport => logger.addTransport(transport));
+            }
+            // inherit level
+            if (parentLogger.level) {
+                logger.level = parentLogger.level;
+            }
+        }
+    
+        // add to list
         this.loggers.push(logger);
         return logger;
-
     }
 }
 
