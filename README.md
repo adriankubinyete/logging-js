@@ -13,7 +13,7 @@ This is beyond a perfect clone of python's logging module, but it mimics the beh
 This "module" of sorts depends on winston to work. You will need to add the following packages to your application:
 
 ```bash
-npm i winston winston-daily-rotate-file
+npm i winston winston-daily-rotate-file moment-timezone
 ```
 
 Winston is the base used to do the logging, and winston-daily-rotate-file is used to create a rotating file transport for our log.

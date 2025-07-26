@@ -1,8 +1,9 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
+import moment from 'moment-timezone';
 
 const LEVELS = {
-    critical: { level: 0, color: "bold red blackBG", ansi: "\x1b[1m"  },
+    critical: { level: 0, color: "bold red blackBG", ansi: "\x1b[1m" },
     error: { level: 1, color: "red", ansi: "\x1b[31m" },
     warn: { level: 2, color: "yellow", ansi: "\x1b[33m" },
     info: { level: 3, color: "bold green", ansi: "\x1b[32m" },
@@ -37,10 +38,10 @@ const shutup = new winston.transports.Console({
 })
 
 class EasyConsole {
-    constructor(options = { level: 'debug' }) {
+    constructor(options = { level: 'debug', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) {
         this.name = "EasyConsole";
         this.padding = 8;
-        this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        this.timezone = options.timezone;
         this.level = options.level;
     }
 
@@ -49,7 +50,9 @@ class EasyConsole {
             level: this.level,
             format: winston.format.combine(
                 winston.format.label({ label: name }),
-                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS', tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+                winston.format.timestamp({
+                    format: () => moment().tz(this.timezone).format('YYYY-MM-DD HH:mm:ss.SSS')
+                }),
                 winston.format.printf(info => {
                     const { timestamp, level, message, label } = info;
                     const color = getAnsiColor(LEVELS[level]?.color || "");
@@ -64,10 +67,10 @@ class EasyConsole {
 }
 
 class EasyFileRotate {
-    constructor(options = { filename: undefined, maxSize: undefined, maxFiles: undefined, level: 'debug' }) {
+    constructor(options = { filename: undefined, maxSize: undefined, maxFiles: undefined, level: 'debug', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) {
         this.name = "EasyFileRotate";
         this.padding = 8;
-        this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        this.timezone = options.timezone;
         this.filename = options.filename;
         this.maxSize = options.maxSize;
         this.maxFiles = options.maxFiles;
@@ -85,7 +88,9 @@ class EasyFileRotate {
             format: winston.format.combine(
                 winston.format.uncolorize(),
                 winston.format.label({ label: name }),
-                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS', tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+                winston.format.timestamp({
+                    format: () => moment().tz(this.timezone).format('YYYY-MM-DD HH:mm:ss.SSS')
+                }),
                 winston.format.printf(({ level, message, label, timestamp }) => {
                     const paddedLevel = level.padEnd(this.padding, ' ').toUpperCase();
                     return `[${timestamp}] [${paddedLevel}] ${label}: ${message}`;
@@ -102,13 +107,12 @@ class Logger {
         this.transports = [];
         this.prefix = undefined;
         this.children = undefined;
-        this.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
         this.padding = 8
 
         this.winston = winston.createLogger({
             levels: builder._getLevels(),
             level: 'debug',
-            transports: [ shutup ],
+            transports: [shutup],
         })
 
         // this allow us to do "logger.<info/debug/etc>('message')" and actually sends it to winston
@@ -122,7 +126,7 @@ class Logger {
 
                     // pretty objects, arrays
                     if (typeof arg === 'object') {
-                        args[i] = '\n'+JSON.stringify(arg, null, 2);
+                        args[i] = '\n' + JSON.stringify(arg, null, 2);
                         if (i < args.length - 1) args[i] += '\n'; // suffix newline if not last arg
                     }
 
@@ -208,7 +212,7 @@ class LogBuilder {
         // Adding this.[LEVEL] consts to the class
         for (let level in this.levels) {
             this[level.toUpperCase()] = level;
-        }    
+        }
     }
 
     // -------------------------------------------------
@@ -236,10 +240,10 @@ class LogBuilder {
         // check logger already exist
         let logger = this.loggers.find(logger => logger.name === name);
         if (logger) return logger;
-    
+
         // create new logger
         logger = new Logger(this, name);
-    
+
         // check if theres a parent log with same name
         const parentLogger = this.loggers.find(logger => name.startsWith(logger.name + '.'));
         if (parentLogger) {
@@ -252,7 +256,7 @@ class LogBuilder {
                 logger.level = parentLogger.level;
             }
         }
-    
+
         // add to list
         this.loggers.push(logger);
         return logger;
